@@ -14,6 +14,7 @@
 // limitations under the License.
 
 #include "regulated_pure_pursuit_controller/regulated_pure_pursuit_controller.h"
+// #include "regulated_pure_pursuit/helper.h"
 
 // pluginlib macros (defines, ...)
 #include <pluginlib/class_list_macros.h>
@@ -69,9 +70,7 @@ namespace regulated_pure_pursuit_controller
     void RegulatedPurePursuitController::initParams(ros::NodeHandle &nh)
     {
         nh.param<std::string>("odom_topic", odom_topic_, "odom");
-
         nh.param<double>("max_robot_pose_search_dist", max_robot_pose_search_dist_, getCostmapMaxExtent());
-
         nh.param<int>("min_global_plan_complete_size", min_global_plan_complete_size_, 20);
         nh.param<double>("global_plan_prune_distance", global_plan_prune_distance_, 1.0);
 
@@ -82,6 +81,7 @@ namespace regulated_pure_pursuit_controller
         nh.param<double>("min_lookahead_dist", min_lookahead_dist_, 0.3);
         nh.param<double>("max_lookahead_dist", max_lookahead_dist_, 0.9);
 
+        // Used to keep track of the cost 
         nh.param<int>("deep_history_num", deep_history_num_, 50);
 
         // Rotate to heading param
@@ -89,6 +89,9 @@ namespace regulated_pure_pursuit_controller
         nh.param<double>("rotate_to_heading_min_angle", rotate_to_heading_min_angle_, 0.785);
         nh.param<double>("rotate_to_heading_angular_vel", rotate_to_heading_angular_vel_, 1.8);
         nh.param<double>("max_angular_accel", max_angular_accel_, 1.5);
+
+        // Kinked parameters
+        nh.param<double>("kink_angle_thresh", kink_angle_thresh_, 130);
 
         // Reversing
         nh.param<bool>("allow_reversing", allow_reversing_, false);
@@ -129,7 +132,6 @@ namespace regulated_pure_pursuit_controller
 
         // Collision avoidance
         nh.param<double>("max_allowed_time_to_collision_up_to_carrot", max_allowed_time_to_collision_up_to_carrot_, 1.0);
-
         nh.param<double>("goal_dist_tol", goal_dist_tol_, 0.25);
 
         double control_frequency;
@@ -140,8 +142,16 @@ namespace regulated_pure_pursuit_controller
         nh.param<double>("transform_tolerance", transform_tolerance, 0.1);
         transform_tolerance_ = ros::Duration(transform_tolerance);
 
-        // Ddynamic Reconfigure
+        nh.param<bool>("get_alternate_lookahead_dist", get_alternate_lookahead_dist_, false);
+        nh.param<bool>("always_prioritise_alternate_lookahead", always_prioritise_alternate_lookahead_, false);
+        nh.param<double>("lookahead_adjustment_y_tol", lookahead_adjustment_y_tol_, 0.1);
 
+        if (!get_alternate_lookahead_dist_ && always_prioritise_alternate_lookahead_)
+        {
+            ROS_WARN("[Regulated Pure Pursuit] : Unable to not get alternate lookahead dist, but prioritise the alternate lookahead");
+        }
+
+        // Ddynamic Reconfigure
         ddr_.reset(new ddynamic_reconfigure::DDynamicReconfigure(nh));
         ddr_->registerVariable<double>("lookahead_time", &this->lookahead_time_, "", 0.0, 20.0);
         ddr_->registerVariable<double>("lookahead_dist", &this->lookahead_dist_, "", 0.0, 20.0);
@@ -175,10 +185,14 @@ namespace regulated_pure_pursuit_controller
         ddr_->registerVariable<double>("cost_scaling_gain", &this->cost_scaling_gain_, "", 0.0, 10.0);
 
         ddr_->registerVariable<bool>("get_alternate_lookahead_dist", &this->get_alternate_lookahead_dist_, "", false);
+        ddr_->registerVariable<bool>("always_prioritise_alternate_lookahead", &this->always_prioritise_alternate_lookahead_, "", false);
+        ddr_->registerVariable<double>("lookahead_adjustment_y_tol", &this->lookahead_adjustment_y_tol_, "", 0.0, 1.0);
+
 
         // Collision avoidance
         ddr_->registerVariable<double>("max_allowed_time_to_collision_up_to_carrot", &this->max_allowed_time_to_collision_up_to_carrot_, "", 0.0, 20.0);
         ddr_->registerVariable<double>("goal_dist_tol", &this->goal_dist_tol_, "", 0.0, 4.0);
+        ddr_->registerVariable<double>("kink_angle_thresh", &this->kink_angle_thresh_, "", 0.0, 180.0);
 
         ddr_->publishServicesTopics();
     }
@@ -257,28 +271,18 @@ namespace regulated_pure_pursuit_controller
 
         // Dynamically adjust look ahead distance based on the speed
         double lookahead_dist = getLookAheadDistance(speed);
-        // ROS_INFO("[RegulatedPurePursuit] : The lookahead distance is: %f", lookahead_dist);
 
         // Get lookahead point and publish for visualization
         geometry_msgs::PoseStamped carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
-        // ROS_INFO("THe current x: %0.3f and current y: %0.3f", carrot_pose.pose.position.x, carrot_pose.pose.position.y);
-        if (fabs(carrot_pose.pose.position.y) < 0.1 && fabs(carrot_pose.pose.position.x) > 0.0) 
+        if (fabs(carrot_pose.pose.position.y) < lookahead_adjustment_y_tol_ && fabs(carrot_pose.pose.position.x) > 0.0)
         {
-
         }
-        // else if (fabs(carrot_pose.pose.position.y) > 0.1 && fabs(carrot_pose.pose.position.x) > 0.1)
-        // {
-        //     ROS_WARN("Limiting the lookahead");
-        //     // Set the lookahead distance to a minimum if the pose is far left or right
-        //     lookahead_dist = (min_lookahead_dist_ + max_lookahead_dist_) / 2;
-        //     carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
-        // }
-        else 
+        else
         {
             // ROS_ERROR("During turns restrict the lookahead");
             // Set the lookahead distance to a minimum if the pose is far left or right
-            lookahead_dist = min_lookahead_dist_;
-            carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
+            double shortened_lookahead_dist = min_lookahead_dist_;
+            carrot_pose = getLookAheadPoint(shortened_lookahead_dist, transformed_plan);
         }
 
         geometry_msgs::PointStamped kink_message;
@@ -286,16 +290,13 @@ namespace regulated_pure_pursuit_controller
         {
             double kinked_dist = std::hypot(kink_message.point.x, kink_message.point.y);
             double carrot_dist = std::hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
-            ROS_WARN("[RegulatedPurePursuit] : Kinked distance is: %f carrot distance is: %f", kinked_dist, carrot_dist);
-            if (kinked_dist < carrot_dist && kinked_dist > min_lookahead_dist_ - 0.2)
+            if (always_prioritise_alternate_lookahead_ || kinked_dist < carrot_dist || kinkedIsPosWhileCarrotIsNeg(kink_message, carrot_pose))
             {
-                ROS_INFO("[RegulatedPurePursuit] : Replacing the original carrot with the kinked carrot");
                 carrot_pose.pose.position.x = kink_message.point.x;
                 carrot_pose.pose.position.y = kink_message.point.y;
                 carrot_pose.pose.position.z = kink_message.point.z;
             }
         }
-
         carrot_pub_.publish(createCarrotMsg(carrot_pose));
 
         // Carrot distance squared
@@ -361,7 +362,6 @@ namespace regulated_pure_pursuit_controller
         // populate and return message
         cmd_vel.twist.linear.x = linear_vel;
         cmd_vel.twist.angular.z = angular_vel;
-
         return mbf_msgs::ExePathResult::SUCCESS;
     }
 
@@ -405,7 +405,6 @@ namespace regulated_pure_pursuit_controller
 
     void RegulatedPurePursuitController::rotateToHeading(double &linear_vel, double &angular_vel, const double &angle_to_path, const geometry_msgs::Twist &curr_speed)
     {
-        ROS_ERROR("[regulated] : rotating to heading");
         // Rotate in place using max angular velocity / acceleration possible
         linear_vel = 0.0;
         const double sign = angle_to_path > 0.0 ? 1.0 : -1.0;
@@ -503,27 +502,38 @@ namespace regulated_pure_pursuit_controller
 
     bool RegulatedPurePursuitController::getAlternateKinkLookAheadDistance(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, geometry_msgs::PointStamped &kink_message)
     {
+        // This is for debugging purposes
+        nav_msgs::Path dummy_path; 
+
+        int number_of_odd_elements = 13;
+        int half = number_of_odd_elements / 2;
+        int full = half * 2;
+
         // Check the first point thru third last point to find a kink
-        for (unsigned int i = 0; i < transformed_plan.size() - 2; i++)
+        for (unsigned int i = 0; i < transformed_plan.size() - number_of_odd_elements - 1; i++)
         {
-            double numerator = getLength(transformed_plan[i], transformed_plan[i + 1]) + getLength(transformed_plan[i + 1], transformed_plan[i + 2]) - getLength(transformed_plan[i], transformed_plan[i + 2]);
-            double denominator = 2.0 * getLength(transformed_plan[i], transformed_plan[i + 1]) * getLength(transformed_plan[i + 1], transformed_plan[i + 2]);
-            double angle = cosh(numerator / denominator);
-            double angle_in_degrees = angle / (2.0 * M_PI) * 360.0;
-            if (angle_in_degrees > 210 || angle_in_degrees < 90)
+            dummy_path.poses.push_back(transformed_plan[i]);
+
+            // Obtain the angle of the path
+            RegulatedPurePursuitHelper regulated_helper_instance(transformed_plan[i].pose.position.x, transformed_plan[i].pose.position.y, transformed_plan[i + half].pose.position.x, transformed_plan[i + half].pose.position.y, transformed_plan[i + full].pose.position.x, transformed_plan[i + full].pose.position.y);
+            double angle_in_degrees = regulated_helper_instance.inverseCosineVectorinDegrees();
+            
+            if (angle_in_degrees < kink_angle_thresh_)
             {
-                std::cout << "The angle in degrees is: " << angle_in_degrees << std::endl;
                 // publish a pose
                 kink_message.header.stamp = ros::Time::now();
-                kink_message.header.frame_id = transformed_plan[i].header.frame_id;
-                kink_message.point.x = transformed_plan[i + 1].pose.position.x;
-                kink_message.point.y = transformed_plan[i + 1].pose.position.y;
+                kink_message.header.frame_id = transformed_plan[i + half].header.frame_id;
+                kink_message.point.x = transformed_plan[i + half].pose.position.x;
+                kink_message.point.y = transformed_plan[i + half].pose.position.y;
                 kink_message.point.z = 0.0;
                 kink_pub_.publish(kink_message);
                 return true;
             }
         }
 
+        dummy_path.header.frame_id = "base_link";
+        dummy_path.header.stamp = ros::Time::now();
+        global_path_pub_.publish(dummy_path);
         return false;
     }
 
@@ -546,11 +556,18 @@ namespace regulated_pure_pursuit_controller
             lookahead_dist = fabs(speed.linear.x) * lookahead_time_;
             lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
         }
-        ROS_ERROR("using scaled lookahead distance with a speed of: %f, %f", speed.linear.x, lookahead_dist);
         return lookahead_dist;
     }
 
-    bool RegulatedPurePursuitController::transformGlobalPlan(const tf2_ros::Buffer &tf, const std::vector<geometry_msgs::PoseStamped> &global_plan, const geometry_msgs::PoseStamped &global_pose, const costmap_2d::Costmap2D &costmap, const std::string &robot_base_frame, double max_plan_length, std::vector<geometry_msgs::PoseStamped> &transformed_plan, int *current_goal_idx, geometry_msgs::TransformStamped *tf_plan_to_robot_frame)
+    bool RegulatedPurePursuitController::transformGlobalPlan(const tf2_ros::Buffer &tf, 
+                                                            const std::vector<geometry_msgs::PoseStamped> &global_plan, 
+                                                            const geometry_msgs::PoseStamped &global_pose, 
+                                                            const costmap_2d::Costmap2D &costmap, 
+                                                            const std::string &robot_base_frame, 
+                                                            double max_plan_length, 
+                                                            std::vector<geometry_msgs::PoseStamped> &transformed_plan, 
+                                                            int *current_goal_idx, 
+                                                            geometry_msgs::TransformStamped *tf_plan_to_robot_frame)
     {
         // this method is a slightly modified version of base_local_planner/goal_functions.h
         const geometry_msgs::PoseStamped &plan_pose = global_plan[0];
@@ -580,7 +597,7 @@ namespace regulated_pure_pursuit_controller
             // we'll discard points on the plan that are outside the local costmap
             double dist_threshold = std::max(costmap.getSizeInCellsX() * costmap.getResolution() / 2.0,
                                              costmap.getSizeInCellsY() * costmap.getResolution() / 2.0);
-            dist_threshold *= 0.85; // just consider 85% of the costmap size to better incorporate point obstacle that are
+            dist_threshold *= 0.85; // just consider 85% of the costmap size to better incorporate point obstacles that are
                                     // located on the border of the local costmap
 
             int i = 0;
@@ -716,13 +733,13 @@ namespace regulated_pure_pursuit_controller
             ROS_DEBUG("Cannot prune path since no transform is available: %s\n", ex.what());
             return false;
         }
+
         return true;
     }
 
     double RegulatedPurePursuitController::costAtPose(const double &x, const double &y)
     {
         unsigned int mx, my;
-
         if (!costmap_->worldToMap(x, y, mx, my))
         {
             ROS_ERROR("RegulatedPurePursuitController: Dimensions of the costmap are too small "
@@ -749,13 +766,10 @@ namespace regulated_pure_pursuit_controller
 
         // The footprint here is the local robot footprint
         double footprint_cost = costmap_model_->footprintCost(x, y, theta, costmap_ros_->getRobotFootprint());
-
         if (footprint_cost == static_cast<double>(costmap_2d::NO_INFORMATION) && costmap_ros_->getLayeredCostmap()->isTrackingUnknown())
         {
             return false;
         }
-
-        // ROS_INFO("THes footprint_cost is: %f", footprint_cost);
 
         int count = 0;
         for (int i = 0; i < footprint_cost_deep_history_.size(); i++)
@@ -776,7 +790,6 @@ namespace regulated_pure_pursuit_controller
         {
             footprint_cost_deep_history_.push_back(footprint_cost);
         }
-
 
         bool answer = (footprint_cost >= static_cast<double>(costmap_2d::LETHAL_OBSTACLE) || count > 0);
         return answer;
@@ -907,10 +920,13 @@ namespace regulated_pure_pursuit_controller
         cmd_vel.twist.linear.x = cmd_vel.twist.linear.y = cmd_vel.twist.angular.z = 0;
     }
 
-    double RegulatedPurePursuitController::getLength(const geometry_msgs::PoseStamped pose_one, const geometry_msgs::PoseStamped pose_two)
+    bool RegulatedPurePursuitController::kinkedIsPosWhileCarrotIsNeg(const geometry_msgs::PointStamped& message_one, const geometry_msgs::PoseStamped& message_two)
     {
-        double answer = sqrt(std::hypot(fabs(pose_one.pose.position.x - pose_two.pose.position.x), fabs(pose_one.pose.position.y - pose_two.pose.position.y)));
-        // std::cout << "the distance between " << pose_one.pose.position.x << ", " << pose_one.pose.position.y << " : " << pose_two.pose.position.x << ", " << pose_two.pose.position.y << " is "<< answer << std::endl;
-        return answer;
+        if ((message_two.pose.position.x < 0.0 && message_one.point.x) > 0.0)
+        {
+            return true;
+        }
+
+        return false;
     }
 }
