@@ -162,6 +162,8 @@ namespace regulated_pure_pursuit_controller
         ddr_->registerVariable<double>("min_lookahead_dist", &this->min_lookahead_dist_, "", 0.0, 5.0);
         ddr_->registerVariable<double>("max_lookahead_dist", &this->max_lookahead_dist_, "", 0.0, 10.0);
 
+        ddr_->registerVariable<bool>("use_diff_drive_params_max_lin_vel", &this->use_diff_drive_params_max_lin_vel_, "", true);
+
         // Rotate to heading param
         ddr_->registerVariable<bool>("use_rotate_to_heading", &this->use_rotate_to_heading_);
         ddr_->registerVariable<double>("rotate_to_heading_min_angle", &this->rotate_to_heading_min_angle_, "", 0.0, 15.0);
@@ -271,6 +273,7 @@ namespace regulated_pure_pursuit_controller
 
         // Dynamically adjust look ahead distance based on the speed
         double lookahead_dist = getLookAheadDistance(speed);
+        // ROS_INFO("[RegulatedPurePursuit] : The lookahead distance is: %f", lookahead_dist);
 
         // Get lookahead point and publish for visualization
         geometry_msgs::PoseStamped carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
@@ -556,6 +559,7 @@ namespace regulated_pure_pursuit_controller
             lookahead_dist = fabs(speed.linear.x) * lookahead_time_;
             lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
         }
+        // ROS_ERROR("using scaled lookahead distance with a speed of: %f, %f", speed.linear.x, lookahead_dist);
         return lookahead_dist;
     }
 
