@@ -25,7 +25,6 @@ PLUGINLIB_EXPORT_CLASS(regulated_pure_pursuit_controller::RegulatedPurePursuitCo
 
 namespace regulated_pure_pursuit_controller
 {
-
     RegulatedPurePursuitController::RegulatedPurePursuitController() : initialized_(false), odom_helper_("odom"), goal_reached_(false) {}
 
     // tf::TransformListener* has been changed to tf2_ros::Buffer* in ROS Noetic
@@ -81,7 +80,7 @@ namespace regulated_pure_pursuit_controller
         nh.param<double>("min_lookahead_dist", min_lookahead_dist_, 0.3);
         nh.param<double>("max_lookahead_dist", max_lookahead_dist_, 0.9);
 
-        // Used to keep track of the cost 
+        // Used to keep track of the cost
         nh.param<int>("deep_history_num", deep_history_num_, 50);
 
         // Rotate to heading param
@@ -133,6 +132,8 @@ namespace regulated_pure_pursuit_controller
         // Collision avoidance
         nh.param<double>("max_allowed_time_to_collision_up_to_carrot", max_allowed_time_to_collision_up_to_carrot_, 1.0);
         nh.param<double>("goal_dist_tol", goal_dist_tol_, 0.25);
+
+        nh.param<double>("lin_val_tol", lin_val_tol_, 0.1);
 
         double control_frequency;
         nh.param<double>("control_frequency", control_frequency, 20);
@@ -188,10 +189,11 @@ namespace regulated_pure_pursuit_controller
         ddr_->registerVariable<bool>("always_prioritise_alternate_lookahead", &this->always_prioritise_alternate_lookahead_, "", false);
         ddr_->registerVariable<double>("lookahead_adjustment_y_tol", &this->lookahead_adjustment_y_tol_, "", 0.0, 1.0);
 
-
         // Collision avoidance
         ddr_->registerVariable<double>("max_allowed_time_to_collision_up_to_carrot", &this->max_allowed_time_to_collision_up_to_carrot_, "", 0.0, 20.0);
         ddr_->registerVariable<double>("goal_dist_tol", &this->goal_dist_tol_, "", 0.0, 4.0);
+        ddr_->registerVariable<double>("lin_val_tol", &this->lin_val_tol_, "", 0.0, 1.0);
+
         ddr_->registerVariable<double>("kink_angle_thresh", &this->kink_angle_thresh_, "", 0.0, 180.0);
 
         ddr_->publishServicesTopics();
@@ -503,7 +505,7 @@ namespace regulated_pure_pursuit_controller
     bool RegulatedPurePursuitController::getAlternateKinkLookAheadDistance(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, geometry_msgs::PointStamped &kink_message)
     {
         // This is for debugging purposes
-        nav_msgs::Path dummy_path; 
+        nav_msgs::Path dummy_path;
 
         int number_of_odd_elements = 13;
         int half = number_of_odd_elements / 2;
@@ -517,7 +519,7 @@ namespace regulated_pure_pursuit_controller
             // Obtain the angle of the path
             RegulatedPurePursuitHelper regulated_helper_instance(transformed_plan[i].pose.position.x, transformed_plan[i].pose.position.y, transformed_plan[i + half].pose.position.x, transformed_plan[i + half].pose.position.y, transformed_plan[i + full].pose.position.x, transformed_plan[i + full].pose.position.y);
             double angle_in_degrees = regulated_helper_instance.inverseCosineVectorinDegrees();
-            
+
             if (angle_in_degrees < kink_angle_thresh_)
             {
                 // publish a pose
@@ -544,30 +546,45 @@ namespace regulated_pure_pursuit_controller
         double lookahead_dist = lookahead_dist_;
         if (use_velocity_scaled_lookahead_dist_)
         {
+            // Hack flow: If the robot is travellin gat the maximum speed then set the lookahead to the max speed
             if (use_diff_drive_params_max_lin_vel_)
             {
-                if (fabs(speed.linear.x) >= diff_drive_lin_val_ - 0.05)
+                if (diff_drive_lin_val_ < desired_linear_vel_)
                 {
-                    // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
-                    lookahead_dist = max_lookahead_dist_;
-                    return lookahead_dist;
+                    if (fabs(speed.linear.x) >= diff_drive_lin_val_ - lin_val_tol_)
+                    {
+                        // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
+                        lookahead_dist = max_lookahead_dist_;
+                        return lookahead_dist;
+                    }
+                }
+                else
+                {
+                    if (fabs(speed.linear.x) >= desired_linear_vel_ - lin_val_tol_)
+                    {
+                        // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
+                        lookahead_dist = max_lookahead_dist_;
+                        return lookahead_dist;
+                    }
                 }
             }
+
+            // Normal flow
             lookahead_dist = fabs(speed.linear.x) * lookahead_time_;
             lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
         }
         return lookahead_dist;
     }
 
-    bool RegulatedPurePursuitController::transformGlobalPlan(const tf2_ros::Buffer &tf, 
-                                                            const std::vector<geometry_msgs::PoseStamped> &global_plan, 
-                                                            const geometry_msgs::PoseStamped &global_pose, 
-                                                            const costmap_2d::Costmap2D &costmap, 
-                                                            const std::string &robot_base_frame, 
-                                                            double max_plan_length, 
-                                                            std::vector<geometry_msgs::PoseStamped> &transformed_plan, 
-                                                            int *current_goal_idx, 
-                                                            geometry_msgs::TransformStamped *tf_plan_to_robot_frame)
+    bool RegulatedPurePursuitController::transformGlobalPlan(const tf2_ros::Buffer &tf,
+                                                             const std::vector<geometry_msgs::PoseStamped> &global_plan,
+                                                             const geometry_msgs::PoseStamped &global_pose,
+                                                             const costmap_2d::Costmap2D &costmap,
+                                                             const std::string &robot_base_frame,
+                                                             double max_plan_length,
+                                                             std::vector<geometry_msgs::PoseStamped> &transformed_plan,
+                                                             int *current_goal_idx,
+                                                             geometry_msgs::TransformStamped *tf_plan_to_robot_frame)
     {
         // this method is a slightly modified version of base_local_planner/goal_functions.h
         const geometry_msgs::PoseStamped &plan_pose = global_plan[0];
@@ -920,7 +937,7 @@ namespace regulated_pure_pursuit_controller
         cmd_vel.twist.linear.x = cmd_vel.twist.linear.y = cmd_vel.twist.angular.z = 0;
     }
 
-    bool RegulatedPurePursuitController::kinkedIsPosWhileCarrotIsNeg(const geometry_msgs::PointStamped& message_one, const geometry_msgs::PoseStamped& message_two)
+    bool RegulatedPurePursuitController::kinkedIsPosWhileCarrotIsNeg(const geometry_msgs::PointStamped &message_one, const geometry_msgs::PoseStamped &message_two)
     {
         if ((message_two.pose.position.x < 0.0 && message_one.point.x) > 0.0)
         {
