@@ -105,6 +105,9 @@ namespace regulated_pure_pursuit_controller
         normal_namespace.param<double>("diff_drive_controller/linear/x/max_velocity", diff_drive_lin_val_, 0.2);
         nh.param<bool>("use_diff_drive_params_max_lin_vel", use_diff_drive_params_max_lin_vel_, false);
 
+        nh.param<bool>("clamp_lookahead", clamp_lookahead_, true);
+        
+
         ROS_WARN("[regulated] : The parameters in regulated pure pursuit are as follows: %d, %f", use_diff_drive_params_max_lin_vel_, diff_drive_lin_val_);
 
         // Speed
@@ -164,6 +167,7 @@ namespace regulated_pure_pursuit_controller
         ddr_->registerVariable<double>("max_lookahead_dist", &this->max_lookahead_dist_, "", 0.0, 10.0);
 
         ddr_->registerVariable<bool>("use_diff_drive_params_max_lin_vel", &this->use_diff_drive_params_max_lin_vel_, "", true);
+        ddr_->registerVariable<bool>("clamp_lookahead", &this->clamp_lookahead_, "", true);
 
         // Rotate to heading param
         ddr_->registerVariable<bool>("use_rotate_to_heading", &this->use_rotate_to_heading_);
@@ -557,8 +561,7 @@ namespace regulated_pure_pursuit_controller
                     if (fabs(speed.linear.x) >= diff_drive_lin_val_ - lin_val_tol_)
                     {
                         // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
-                        lookahead_dist = max_lookahead_dist_;
-                        return lookahead_dist;
+                        return max_lookahead_dist_;
                     }
                 }
                 else
@@ -566,16 +569,26 @@ namespace regulated_pure_pursuit_controller
                     if (fabs(speed.linear.x) >= desired_linear_vel_ - lin_val_tol_)
                     {
                         // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
-                        lookahead_dist = max_lookahead_dist_;
-                        return lookahead_dist;
+                        return max_lookahead_dist_;
                     }
                 }
+            }
+
+            if (clamp_lookahead_)
+            {
+                if (fabs(lookahead_dist - min_lookahead_dist_) > fabs(lookahead_dist - max_lookahead_dist_))
+                {
+                    return max_lookahead_dist_;
+                }
+
+                return min_lookahead_dist_;
             }
 
             // Normal flow
             lookahead_dist = fabs(speed.linear.x) * lookahead_time_;
             lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
         }
+
         // ROS_ERROR("using scaled lookahead distance with a speed of: %f, %f", speed.linear.x, lookahead_dist);
         return lookahead_dist;
     }

@@ -189,6 +189,7 @@ namespace regulated_pure_pursuit_controller
 
     // Lookahead
     bool use_diff_drive_params_max_lin_vel_{false};
+    bool clamp_lookahead_{true};
     double diff_drive_lin_val_;
     bool use_velocity_scaled_lookahead_dist_;
     double lookahead_time_;
