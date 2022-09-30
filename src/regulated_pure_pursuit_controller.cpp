@@ -576,7 +576,7 @@ namespace regulated_pure_pursuit_controller
 
             if (clamp_lookahead_)
             {
-                if (fabs(lookahead_dist - min_lookahead_dist_)) > fabs(lookahead_dist - max_lookahead_dist_))
+                if (fabs(lookahead_dist - min_lookahead_dist_) > fabs(lookahead_dist - max_lookahead_dist_))
                 {
                     return max_lookahead_dist_;
                 }
