@@ -503,6 +503,7 @@ namespace regulated_pure_pursuit_controller
 
     bool RegulatedPurePursuitController::getAlternateKinkLookAheadDistance(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, geometry_msgs::PointStamped &kink_message)
     {
+        if (transformed_plan.size() < 3) return false;
         // Check the first point thru third last point to find a kink
         for (unsigned int i = 0; i < transformed_plan.size() - 2; i++)
         {
