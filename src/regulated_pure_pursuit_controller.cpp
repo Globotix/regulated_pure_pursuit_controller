@@ -262,7 +262,7 @@ namespace regulated_pure_pursuit_controller
         // Get lookahead point and publish for visualization
         geometry_msgs::PoseStamped carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
         // ROS_INFO("THe current x: %0.3f and current y: %0.3f", carrot_pose.pose.position.x, carrot_pose.pose.position.y);
-        if (fabs(carrot_pose.pose.position.y) < 0.1 && fabs(carrot_pose.pose.position.x) > 0.0) 
+        if (fabs(carrot_pose.pose.position.y) < 0.2 && fabs(carrot_pose.pose.position.x) > 0.0)
         {
 
         }
@@ -281,6 +281,7 @@ namespace regulated_pure_pursuit_controller
             carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
         }
 
+        /*
         geometry_msgs::PointStamped kink_message;
         if (get_alternate_lookahead_dist_ && getAlternateKinkLookAheadDistance(transformed_plan, kink_message))
         {
@@ -293,6 +294,30 @@ namespace regulated_pure_pursuit_controller
                 carrot_pose.pose.position.x = kink_message.point.x;
                 carrot_pose.pose.position.y = kink_message.point.y;
                 carrot_pose.pose.position.z = kink_message.point.z;
+            }
+        }
+        */
+
+        if (transformed_plan.size() > 2)
+        {
+            for (std::vector<geometry_msgs::PoseStamped>::iterator it = transformed_plan.begin(); it != transformed_plan.end(); it++)
+            {
+                tf2::Quaternion qt1(it->pose.orientation.x, it->pose.orientation.y, it->pose.orientation.z, it->pose.orientation.w);
+                double angle_diff_degrees = tf2::getYaw(qt1) * (180/M_PI);
+                if (fabs(angle_diff_degrees) > 90)
+                {
+                    if ((pow(it->pose.position.x, 2) + pow(it->pose.position.y, 2)) > 0.04) // pow(0.2, 2) = 0.04
+                    {
+                        lookahead_dist = getLookAheadDistance(speed); // re-enstate regular lookahead
+                        carrot_pose.pose = it->pose;
+                    }
+                    else
+                    {
+                        lookahead_dist = min_lookahead_dist_;
+                        carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan); // don't end up with very small dist
+                    }
+                    break;
+                }
             }
         }
 
