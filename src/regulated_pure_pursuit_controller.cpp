@@ -507,11 +507,11 @@ namespace regulated_pure_pursuit_controller
         // Check the first point thru third last point to find a kink
         for (unsigned int i = 0; i < transformed_plan.size() - 2; i++)
         {
-            double numerator = getLength(transformed_plan[i], transformed_plan[i + 1]) + getLength(transformed_plan[i + 1], transformed_plan[i + 2]) - getLength(transformed_plan[i], transformed_plan[i + 2]);
+            double numerator = pow(getLength(transformed_plan[i], transformed_plan[i + 1]), 2) + pow(getLength(transformed_plan[i + 1], transformed_plan[i + 2]), 2) - pow(getLength(transformed_plan[i], transformed_plan[i + 2]), 2);
             double denominator = 2.0 * getLength(transformed_plan[i], transformed_plan[i + 1]) * getLength(transformed_plan[i + 1], transformed_plan[i + 2]);
-            double angle = cosh(numerator / denominator);
-            double angle_in_degrees = angle / (2.0 * M_PI) * 360.0;
-            if (angle_in_degrees > 210 || angle_in_degrees < 90)
+            double angle = acos(numerator / denominator);
+            double angle_in_degrees = angle * (180.0 / M_PI);
+            if (angle_in_degrees < 90)
             {
                 std::cout << "The angle in degrees is: " << angle_in_degrees << std::endl;
                 // publish a pose
@@ -910,7 +910,7 @@ namespace regulated_pure_pursuit_controller
 
     double RegulatedPurePursuitController::getLength(const geometry_msgs::PoseStamped pose_one, const geometry_msgs::PoseStamped pose_two)
     {
-        double answer = sqrt(std::hypot(fabs(pose_one.pose.position.x - pose_two.pose.position.x), fabs(pose_one.pose.position.y - pose_two.pose.position.y)));
+        double answer = std::hypot(pose_one.pose.position.x - pose_two.pose.position.x, pose_one.pose.position.y - pose_two.pose.position.y);
         // std::cout << "the distance between " << pose_one.pose.position.x << ", " << pose_one.pose.position.y << " : " << pose_two.pose.position.x << ", " << pose_two.pose.position.y << " is "<< answer << std::endl;
         return answer;
     }
