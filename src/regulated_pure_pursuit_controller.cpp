@@ -298,7 +298,7 @@ namespace regulated_pure_pursuit_controller
         }
         */
 
-        if (transformed_plan.size() > 2)
+        if (transformed_plan.size() > 1)
         {
             for (std::vector<geometry_msgs::PoseStamped>::iterator it = transformed_plan.begin(); it != transformed_plan.end(); it++)
             {
