@@ -261,6 +261,7 @@ namespace regulated_pure_pursuit_controller
 
         // Get lookahead point and publish for visualization
         geometry_msgs::PoseStamped carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
+        /*
         // ROS_INFO("THe current x: %0.3f and current y: %0.3f", carrot_pose.pose.position.x, carrot_pose.pose.position.y);
         if (fabs(carrot_pose.pose.position.y) < 0.2 && fabs(carrot_pose.pose.position.x) > 0.0)
         {
@@ -280,6 +281,7 @@ namespace regulated_pure_pursuit_controller
             lookahead_dist = min_lookahead_dist_;
             carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
         }
+        */
 
         /*
         geometry_msgs::PointStamped kink_message;
@@ -298,6 +300,12 @@ namespace regulated_pure_pursuit_controller
         }
         */
 
+        if (fabs(atan2(carrot_pose.pose.position.y, carrot_pose.pose.position.x)) > 0.15) // 0.15 rad is about 8.59 degrees
+        {
+            //align yourself, first, Jose!
+            lookahead_dist = min_lookahead_dist_;
+            carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
+        }
         if (transformed_plan.size() > 1)
         {
             for (std::vector<geometry_msgs::PoseStamped>::iterator it = transformed_plan.begin(); it != transformed_plan.end(); it++)
