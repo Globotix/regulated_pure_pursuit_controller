@@ -302,8 +302,7 @@ namespace regulated_pure_pursuit_controller
         {
             for (std::vector<geometry_msgs::PoseStamped>::iterator it = transformed_plan.begin(); it != transformed_plan.end(); it++)
             {
-                tf2::Quaternion qt1(it->pose.orientation.x, it->pose.orientation.y, it->pose.orientation.z, it->pose.orientation.w);
-                double angle_diff_degrees = tf2::getYaw(qt1) * (180/M_PI);
+                double angle_diff_degrees = tf2::getYaw(it->pose.orientation) * (180/M_PI);
                 if (fabs(angle_diff_degrees) > 90)
                 {
                     if ((pow(it->pose.position.x, 2) + pow(it->pose.position.y, 2)) > 0.04) // pow(0.2, 2) = 0.04
