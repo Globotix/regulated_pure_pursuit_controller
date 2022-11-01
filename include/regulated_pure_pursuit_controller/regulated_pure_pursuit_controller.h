@@ -148,7 +148,7 @@ namespace regulated_pure_pursuit_controller
     geometry_msgs::PoseStamped getLookAheadPoint(
         const double &lookahead_dist, const std::vector<geometry_msgs::PoseStamped> &transformed_plan);
 
-    bool getAlternateKinkLookAheadDistance(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, geometry_msgs::PointStamped& kink_message);
+    // bool getAlternateKinkLookAheadDistance(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, geometry_msgs::PointStamped& kink_message); // deprecated
 
     double getLookAheadDistance(const geometry_msgs::Twist &speed);
 
@@ -189,14 +189,14 @@ namespace regulated_pure_pursuit_controller
 
     void updateHeaderOfCmdVel(geometry_msgs::TwistStamped &cmd_vel);
 
-    double getLength(const geometry_msgs::PoseStamped pose_one, const geometry_msgs::PoseStamped pose_two);
+    // double getLength(const geometry_msgs::PoseStamped pose_one, const geometry_msgs::PoseStamped pose_two); // deprecated
 
     void setSpeedLimit(const double &speed_limit, const bool &percentage);
 
   private:
     bool initialized_{false}; // indication of whether program has initialized
 
-    bool get_alternate_lookahead_dist_{false};
+    // bool get_alternate_lookahead_dist_{false}; // deprecated
 
     /**
      * User-defined params
@@ -267,7 +267,7 @@ namespace regulated_pure_pursuit_controller
     ros::Publisher global_path_pub_, local_plan_pub_;
     ros::Publisher carrot_pub_;
     ros::Publisher carrot_arc_pub_;
-    ros::Publisher kink_pub_;
+    // ros::Publisher kink_pub_; // deprecated
 
     /**
      * Configs

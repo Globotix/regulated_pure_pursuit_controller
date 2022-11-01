@@ -63,7 +63,7 @@ namespace regulated_pure_pursuit_controller
         local_plan_pub_ = nh.advertise<nav_msgs::Path>("local_plan", 1);
         carrot_pub_ = nh.advertise<geometry_msgs::PointStamped>("lookahead_point", 1);
         carrot_arc_pub_ = nh.advertise<nav_msgs::Path>("lookahead_collision_arc", 1);
-        kink_pub_ = nh.advertise<geometry_msgs::PointStamped>("kink_point", 1);
+        // kink_pub_ = nh.advertise<geometry_msgs::PointStamped>("kink_point", 1); // deprecated
     }
 
     void RegulatedPurePursuitController::initParams(ros::NodeHandle &nh)
@@ -176,7 +176,7 @@ namespace regulated_pure_pursuit_controller
         ddr_->registerVariable<double>("cost_scaling_dist", &this->cost_scaling_dist_, "", 0.0, 10.0);
         ddr_->registerVariable<double>("cost_scaling_gain", &this->cost_scaling_gain_, "", 0.0, 10.0);
 
-        ddr_->registerVariable<bool>("get_alternate_lookahead_dist", &this->get_alternate_lookahead_dist_, "", false);
+        // ddr_->registerVariable<bool>("get_alternate_lookahead_dist", &this->get_alternate_lookahead_dist_, "", false); //deprecated
 
         // Collision avoidance
         ddr_->registerVariable<double>("max_allowed_time_to_collision_up_to_carrot", &this->max_allowed_time_to_collision_up_to_carrot_, "", 0.0, 20.0);
@@ -263,7 +263,7 @@ namespace regulated_pure_pursuit_controller
 
         // Get lookahead point and publish for visualization
         geometry_msgs::PoseStamped carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
-        /*
+        /* deprecated
         // ROS_INFO("THe current x: %0.3f and current y: %0.3f", carrot_pose.pose.position.x, carrot_pose.pose.position.y);
         if (fabs(carrot_pose.pose.position.y) < 0.2 && fabs(carrot_pose.pose.position.x) > 0.0)
         {
@@ -535,6 +535,7 @@ namespace regulated_pure_pursuit_controller
         return *goal_pose_it;
     }
 
+/* deprecated
     bool RegulatedPurePursuitController::getAlternateKinkLookAheadDistance(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, geometry_msgs::PointStamped &kink_message)
     {
         if (transformed_plan.size() < 3) return false;
@@ -561,6 +562,7 @@ namespace regulated_pure_pursuit_controller
 
         return false;
     }
+*/
 
     double RegulatedPurePursuitController::getLookAheadDistance(const geometry_msgs::Twist &speed)
     {
@@ -963,10 +965,12 @@ namespace regulated_pure_pursuit_controller
         cmd_vel.twist.linear.x = cmd_vel.twist.linear.y = cmd_vel.twist.angular.z = 0;
     }
 
+/* deprecated
     double RegulatedPurePursuitController::getLength(const geometry_msgs::PoseStamped pose_one, const geometry_msgs::PoseStamped pose_two)
     {
         double answer = std::hypot(pose_one.pose.position.x - pose_two.pose.position.x, pose_one.pose.position.y - pose_two.pose.position.y);
         // std::cout << "the distance between " << pose_one.pose.position.x << ", " << pose_one.pose.position.y << " : " << pose_two.pose.position.x << ", " << pose_two.pose.position.y << " is "<< answer << std::endl;
         return answer;
     }
+*/
 }
