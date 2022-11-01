@@ -207,8 +207,9 @@ namespace regulated_pure_pursuit_controller
     double global_plan_prune_distance_{1.0};
 
     // Lookahead
-    bool use_diff_drive_params_max_lin_vel_;
-    double diff_drive_lin_val_;
+    // bool use_diff_drive_params_max_lin_vel_; // deprecated; no longer used in this branch, replaced by threshold_speed_to_trigger_max_lookahead_dist_ (use very large speed to disable)
+    // double diff_drive_lin_val_; // deprecated; no longer used in this branch, replaced by threshold_speed_to_trigger_max_lookahead_dist_
+    double threshold_speed_to_trigger_max_lookahead_dist_; // replaces use_diff_drive_params_max_lin_vel_ and diff_drive_lin_val_
     bool use_velocity_scaled_lookahead_dist_;
     double lookahead_time_;
     double lookahead_dist_;

@@ -100,10 +100,12 @@ namespace regulated_pure_pursuit_controller
         }
 
         ros::NodeHandle normal_namespace;
-        normal_namespace.param<double>("diff_drive_controller/linear/x/max_velocity", diff_drive_lin_val_, 0.2);
-        nh.param<bool>("use_diff_drive_params_max_lin_vel", use_diff_drive_params_max_lin_vel_, false);
+        // normal_namespace.param<double>("diff_drive_controller/linear/x/max_velocity", diff_drive_lin_val_, 0.2); // deprecated; no longer used in this branch, replaced by threshold_speed_to_trigger_max_lookahead_dist_
+        // nh.param<bool>("use_diff_drive_params_max_lin_vel", use_diff_drive_params_max_lin_vel_, false); // deprecated; no longer used in this branch, replaced by threshold_speed_to_trigger_max_lookahead_dist_ (use very large speed to disable)
 
-        ROS_WARN("[regulated] : The parameters in regulated pure pursuit are as follows: %d, %f", use_diff_drive_params_max_lin_vel_, diff_drive_lin_val_);
+        // ROS_WARN("[regulated] : The parameters in regulated pure pursuit are as follows: %d, %f", use_diff_drive_params_max_lin_vel_, diff_drive_lin_val_); // deprecated; no longer used in this branch
+
+        nh.param<double>("threshold_speed_to_trigger_max_lookahead", threshold_speed_to_trigger_max_lookahead_dist_, 0.15); // replaces diff_drive_lin_val_
 
         // Speed
         nh.param<double>("desired_linear_vel", desired_linear_vel_, 0.5);
@@ -567,6 +569,7 @@ namespace regulated_pure_pursuit_controller
         double lookahead_dist = lookahead_dist_;
         if (use_velocity_scaled_lookahead_dist_)
         {
+            /* replaced with threshold_speed_to_trigger_max_lookahead_dist_
             if (use_diff_drive_params_max_lin_vel_)
             {
                 if (fabs(speed.linear.x) >= diff_drive_lin_val_ - 0.05)
@@ -575,6 +578,13 @@ namespace regulated_pure_pursuit_controller
                     lookahead_dist = max_lookahead_dist_;
                     return lookahead_dist;
                 }
+            }
+            */
+            if (fabs(speed.linear.x) >= threshold_speed_to_trigger_max_lookahead_dist_)
+            {
+                // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
+                lookahead_dist = max_lookahead_dist_;
+                return lookahead_dist;
             }
             lookahead_dist = fabs(speed.linear.x) * lookahead_time_;
             lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
