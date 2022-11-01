@@ -574,7 +574,7 @@ namespace regulated_pure_pursuit_controller
             {
                 if (fabs(speed.linear.x) >= diff_drive_lin_val_ - 0.05)
                 {
-                    // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
+                    // ROS_ERROR("Activating maximum lookahead since the maximum speed is crossed");
                     lookahead_dist = max_lookahead_dist_;
                     return lookahead_dist;
                 }
@@ -582,7 +582,7 @@ namespace regulated_pure_pursuit_controller
             */
             if (fabs(speed.linear.x) >= threshold_speed_to_trigger_max_lookahead_dist_)
             {
-                // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
+                // ROS_ERROR("Activating maximum lookahead since the maximum speed is crossed");
                 lookahead_dist = max_lookahead_dist_;
                 return lookahead_dist;
             }
