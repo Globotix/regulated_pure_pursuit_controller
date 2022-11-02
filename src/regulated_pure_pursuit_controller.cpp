@@ -629,7 +629,7 @@ namespace regulated_pure_pursuit_controller
                                     // located on the border of the local costmap
 
             int i = 0;
-            std::vector<int> i_candidates;
+            std::vector<std::tuple<int, double>> i_candidates; // i_candidates<int index, double dist>
             double sq_dist_threshold = dist_threshold * dist_threshold;
             double sq_dist = 1e10;
 
@@ -642,9 +642,11 @@ namespace regulated_pure_pursuit_controller
                 if (new_sq_dist > sq_dist_threshold)
                     break; // force stop if we have reached the costmap border
 
-                if (0.01 < new_sq_dist) // if new_sq_dist within (10cm)^2
+                // added to enforce stronger check to find closest, yet first occurance, pose in a path
+                // short lists elements that are within (10cm)^2
+                if (0.01 > new_sq_dist)
                 {
-                    i_candidates.push_back(j);
+                    i_candidates.push_back(std::make_tuple(j, new_sq_dist));
                 }
 
                 if (new_sq_dist < sq_dist) // find closest distance
@@ -654,13 +656,26 @@ namespace regulated_pure_pursuit_controller
                 }
             }
 
-            // pick first occurance, to mitigate cases where if path goes back and forth
-            // along the same line, it might only pick the back portion only
-            // if index difference is 1, assume that path is forth only
+            // added to enforce stronger check to find closest, yet first occurance, pose in a path
             if (!i_candidates.empty())
             {
-                std::vector<int>::iterator result = std::min_element(i_candidates.begin(), i_candidates.end());
-                i = *result;
+                std::vector<std::tuple<int, double>>::iterator result = i_candidates.begin();
+                for (std::vector<std::tuple<int, double>>::iterator k_it = i_candidates.begin() + 1; k_it != i_candidates.end(); k_it++)
+                {
+                    // loop through continuous index
+                    if (std::get<0>(*k_it) - std::get<0>(*(k_it - 1)) == 1)
+                    {
+                        if (std::get<1>(*result) > std::get<1>(*k_it))
+                        {
+                            result = k_it;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                i = std::get<0>(*result);
             }
 
             geometry_msgs::PoseStamped newer_pose;
