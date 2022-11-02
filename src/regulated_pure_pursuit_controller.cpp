@@ -317,8 +317,8 @@ namespace regulated_pure_pursuit_controller
                 {
                     if ((pow(it->pose.position.x, 2) + pow(it->pose.position.y, 2)) > 0.04) // pow(0.2, 2) = 0.04
                     {
-                        lookahead_dist = getLookAheadDistance(speed); // re-enstate regular lookahead
                         carrot_pose.pose = it->pose;
+                        lookahead_dist = std::hypotf(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
                     }
                     else
                     {
