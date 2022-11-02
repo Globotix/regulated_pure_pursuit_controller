@@ -628,7 +628,8 @@ namespace regulated_pure_pursuit_controller
             dist_threshold *= 0.85; // just consider 85% of the costmap size to better incorporate point obstacle that are
                                     // located on the border of the local costmap
 
-            int i = 0; int last_i = 0; int last_j = 0;
+            int i = 0;
+            std::vector<int> i_candidates;
             double sq_dist_threshold = dist_threshold * dist_threshold;
             double sq_dist = 1e10;
 
@@ -641,24 +642,25 @@ namespace regulated_pure_pursuit_controller
                 if (new_sq_dist > sq_dist_threshold)
                     break; // force stop if we have reached the costmap border
 
+                if (0.01 < new_sq_dist) // if new_sq_dist within (10cm)^2
+                {
+                    i_candidates.push_back(j);
+                }
+
                 if (new_sq_dist < sq_dist) // find closest distance
                 {
                     sq_dist = new_sq_dist;
-                    last_j = last_i;
-                    last_i = j;
+                    i = j;
                 }
             }
 
             // pick first occurance, to mitigate cases where if path goes back and forth
             // along the same line, it might only pick the back portion only
             // if index difference is 1, assume that path is forth only
-            if (abs(last_i - last_j) > 1)
+            if (!i_candidates.empty())
             {
-                i = std::min(last_i, last_j);
-            }
-            else
-            {
-                i = last_i;
+                std::vector<int>::iterator result = std::min_element(i_candidates.begin(), i_candidates.end());
+                i = *result;
             }
 
             geometry_msgs::PoseStamped newer_pose;
