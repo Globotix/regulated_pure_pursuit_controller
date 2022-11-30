@@ -53,7 +53,7 @@ namespace regulated_pure_pursuit_controller
         }
         else
         {
-            ROS_WARN("RegulatedPurePursuitController has already been initialized, doing nothing.");
+            ROS_WARN("RegulatedPurePursuitController has already been initialized.");
         }
     }
 
@@ -101,15 +101,6 @@ namespace regulated_pure_pursuit_controller
             allow_reversing_ = false;
         }
 
-        ros::NodeHandle normal_namespace;
-        normal_namespace.param<double>("diff_drive_controller/linear/x/max_velocity", diff_drive_lin_val_, 0.2);
-        nh.param<bool>("use_diff_drive_params_max_lin_vel", use_diff_drive_params_max_lin_vel_, false);
-
-        nh.param<bool>("clamp_lookahead", clamp_lookahead_, true);
-        
-
-        ROS_WARN("[regulated] : The parameters in regulated pure pursuit are as follows: %d, %f", use_diff_drive_params_max_lin_vel_, diff_drive_lin_val_);
-
         // Speed
         nh.param<double>("desired_linear_vel", desired_linear_vel_, 0.5);
         nh.param<double>("max_angular_vel", max_angular_vel_, 1.5);
@@ -136,8 +127,6 @@ namespace regulated_pure_pursuit_controller
         nh.param<double>("max_allowed_time_to_collision_up_to_carrot", max_allowed_time_to_collision_up_to_carrot_, 1.0);
         nh.param<double>("goal_dist_tol", goal_dist_tol_, 0.25);
 
-        nh.param<double>("lin_val_tol", lin_val_tol_, 0.1);
-
         double control_frequency;
         nh.param<double>("control_frequency", control_frequency, 20);
         control_duration_ = 1.0 / control_frequency;
@@ -148,7 +137,6 @@ namespace regulated_pure_pursuit_controller
 
         nh.param<bool>("get_alternate_lookahead_dist", get_alternate_lookahead_dist_, false);
         nh.param<bool>("always_prioritise_alternate_lookahead", always_prioritise_alternate_lookahead_, false);
-        nh.param<double>("lookahead_adjustment_y_tol", lookahead_adjustment_y_tol_, 0.1);
 
         if (!get_alternate_lookahead_dist_ && always_prioritise_alternate_lookahead_)
         {
@@ -165,9 +153,6 @@ namespace regulated_pure_pursuit_controller
         ddr_->registerVariable<bool>("use_velocity_scaled_lookahead_dist", &this->use_velocity_scaled_lookahead_dist_);
         ddr_->registerVariable<double>("min_lookahead_dist", &this->min_lookahead_dist_, "", 0.0, 5.0);
         ddr_->registerVariable<double>("max_lookahead_dist", &this->max_lookahead_dist_, "", 0.0, 10.0);
-
-        ddr_->registerVariable<bool>("use_diff_drive_params_max_lin_vel", &this->use_diff_drive_params_max_lin_vel_, "", true);
-        ddr_->registerVariable<bool>("clamp_lookahead", &this->clamp_lookahead_, "", true);
 
         // Rotate to heading param
         ddr_->registerVariable<bool>("use_rotate_to_heading", &this->use_rotate_to_heading_);
@@ -193,12 +178,10 @@ namespace regulated_pure_pursuit_controller
 
         ddr_->registerVariable<bool>("get_alternate_lookahead_dist", &this->get_alternate_lookahead_dist_, "", false);
         ddr_->registerVariable<bool>("always_prioritise_alternate_lookahead", &this->always_prioritise_alternate_lookahead_, "", false);
-        ddr_->registerVariable<double>("lookahead_adjustment_y_tol", &this->lookahead_adjustment_y_tol_, "", 0.0, 1.0);
 
         // Collision avoidance
         ddr_->registerVariable<double>("max_allowed_time_to_collision_up_to_carrot", &this->max_allowed_time_to_collision_up_to_carrot_, "", 0.0, 20.0);
         ddr_->registerVariable<double>("goal_dist_tol", &this->goal_dist_tol_, "", 0.0, 4.0);
-        ddr_->registerVariable<double>("lin_val_tol", &this->lin_val_tol_, "", 0.0, 1.0);
 
         ddr_->registerVariable<double>("kink_angle_thresh", &this->kink_angle_thresh_, "", 0.0, 180.0);
 
@@ -265,8 +248,22 @@ namespace regulated_pure_pursuit_controller
 
         if (fabs(std::sqrt(dx_2 + dy_2)) < goal_dist_tol_ && global_plan_.size() <= min_global_plan_complete_size_)
         {
-            goal_reached_ = true;
-            return mbf_msgs::ExePathResult::SUCCESS;
+            double angle_to_goal = tf2::getYaw(global_goal.pose.orientation);
+            if (fabs(angle_to_goal) < 0.35)
+            {
+                goal_reached_ = true;
+                return mbf_msgs::ExePathResult::SUCCESS;
+            }
+            else
+            {
+                double linear_vel, angular_vel;
+                rotateToHeading(linear_vel, angular_vel, angle_to_goal, speed);
+
+                // populate and return message
+                cmd_vel.twist.linear.x = 0.0;
+                cmd_vel.twist.angular.z = angular_vel;
+                return mbf_msgs::ExePathResult::SUCCESS;
+            }
         }
 
         // Return false if the transformed global plan is empty
@@ -279,31 +276,23 @@ namespace regulated_pure_pursuit_controller
 
         // Dynamically adjust look ahead distance based on the speed
         double lookahead_dist = getLookAheadDistance(speed);
-        // ROS_INFO("[RegulatedPurePursuit] : The lookahead distance is: %f", lookahead_dist);
 
         // Get lookahead point and publish for visualization
         geometry_msgs::PoseStamped carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
-        if (fabs(carrot_pose.pose.position.y) < lookahead_adjustment_y_tol_ && fabs(carrot_pose.pose.position.x) > 0.0)
-        {
-        }
-        else
-        {
-            // ROS_ERROR("During turns restrict the lookahead");
-            // Set the lookahead distance to a minimum if the pose is far left or right
-            double shortened_lookahead_dist = min_lookahead_dist_;
-            carrot_pose = getLookAheadPoint(shortened_lookahead_dist, transformed_plan);
-        }
 
         geometry_msgs::PointStamped kink_message;
         if (get_alternate_lookahead_dist_ && getAlternateKinkLookAheadDistance(transformed_plan, kink_message))
         {
             double kinked_dist = std::hypot(kink_message.point.x, kink_message.point.y);
             double carrot_dist = std::hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
-            if (always_prioritise_alternate_lookahead_ || kinked_dist < carrot_dist || kinkedIsPosWhileCarrotIsNeg(kink_message, carrot_pose))
+
+            bool condition_one = (always_prioritise_alternate_lookahead_ || kinked_dist < carrot_dist || kinkedIsPosWhileCarrotIsNeg(kink_message, carrot_pose));
+            if (condition_one && kinked_dist >= 0)
             {
                 carrot_pose.pose.position.x = kink_message.point.x;
                 carrot_pose.pose.position.y = kink_message.point.y;
                 carrot_pose.pose.position.z = kink_message.point.z;
+                lookahead_dist = kinked_dist;
             }
         }
         carrot_pub_.publish(createCarrotMsg(carrot_pose));
@@ -356,10 +345,7 @@ namespace regulated_pure_pursuit_controller
             angular_vel = std::clamp(angular_vel, -max_angular_vel_, max_angular_vel_);
         }
 
-        // ROS_ERROR("The angle of the path is: %f", std::atan2(carrot_pose.pose.position.y, carrot_pose.pose.position.x));
-
         // Collision checking on this velocity heading
-        //  TODO: Update this collision checking with the diff drive params minimum and maximum parameter speeds
         const double &carrot_dist = std::hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
         if (isCollisionImminent(robot_pose, linear_vel, angular_vel, carrot_dist))
         {
@@ -536,6 +522,10 @@ namespace regulated_pure_pursuit_controller
                 kink_message.point.y = transformed_plan[i + half].pose.position.y;
                 kink_message.point.z = 0.0;
                 kink_pub_.publish(kink_message);
+
+                dummy_path.header.frame_id = "base_link";
+                dummy_path.header.stamp = ros::Time::now();
+                global_path_pub_.publish(dummy_path);
                 return true;
             }
         }
@@ -553,43 +543,11 @@ namespace regulated_pure_pursuit_controller
         double lookahead_dist = lookahead_dist_;
         if (use_velocity_scaled_lookahead_dist_)
         {
-            // Hack flow: If the robot is travellin gat the maximum speed then set the lookahead to the max speed
-            if (use_diff_drive_params_max_lin_vel_)
-            {
-                if (diff_drive_lin_val_ < desired_linear_vel_)
-                {
-                    if (fabs(speed.linear.x) >= diff_drive_lin_val_ - lin_val_tol_)
-                    {
-                        // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
-                        return max_lookahead_dist_;
-                    }
-                }
-                else
-                {
-                    if (fabs(speed.linear.x) >= desired_linear_vel_ - lin_val_tol_)
-                    {
-                        // ROS_ERROR("Activating maximum lookahead since the msaximum speed is crossed");
-                        return max_lookahead_dist_;
-                    }
-                }
-            }
-
-            if (clamp_lookahead_)
-            {
-                if (fabs(lookahead_dist - min_lookahead_dist_) > fabs(lookahead_dist - max_lookahead_dist_))
-                {
-                    return max_lookahead_dist_;
-                }
-
-                return min_lookahead_dist_;
-            }
-
             // Normal flow
             lookahead_dist = fabs(speed.linear.x) * lookahead_time_;
             lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
         }
 
-        // ROS_ERROR("using scaled lookahead distance with a speed of: %f, %f", speed.linear.x, lookahead_dist);
         return lookahead_dist;
     }
 
