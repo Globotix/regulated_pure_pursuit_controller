@@ -64,6 +64,7 @@ namespace regulated_pure_pursuit_controller
         carrot_pub_ = nh.advertise<geometry_msgs::PointStamped>("lookahead_point", 1);
         carrot_arc_pub_ = nh.advertise<nav_msgs::Path>("lookahead_collision_arc", 1);
         kink_pub_ = nh.advertise<geometry_msgs::PointStamped>("kink_point", 1);
+        status_pub_ = nh.advertise<std_msgs::Float32>("status", 1);
     }
 
     void RegulatedPurePursuitController::initParams(ros::NodeHandle &nh)
@@ -94,6 +95,10 @@ namespace regulated_pure_pursuit_controller
 
         // Reversing
         nh.param<bool>("allow_reversing", allow_reversing_, false);
+
+        // Collision checking
+        nh.param<bool>("enable_collision_checking", enable_collision_checking_, false);
+        
         if (use_rotate_to_heading_ && allow_reversing_)
         {
             ROS_WARN("Disabling reversing. Both use_rotate_to_heading and allow_reversing "
@@ -353,6 +358,10 @@ namespace regulated_pure_pursuit_controller
             linear_vel = 0.0;
             angular_vel = 0.0;
         }
+
+        std_msgs::Float32 float32_msg;
+        float32_msg.data = lookahead_dist;
+        status_pub_.publish(float32_msg);
 
         // populate and return message
         cmd_vel.twist.linear.x = linear_vel;
@@ -791,6 +800,11 @@ namespace regulated_pure_pursuit_controller
     {
         // Note(stevemacenski): This may be a bit unusual, but the robot_pose is in
         // odom frame and the carrot_pose is in robot base frame.
+
+        if (!enable_collision_checking_)
+        {
+            return false;
+        }
 
         // check current point is OK
         if (inCollision(robot_pose.pose.position.x, robot_pose.pose.position.y, tf2::getYaw(robot_pose.pose.orientation)))

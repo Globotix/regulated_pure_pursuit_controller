@@ -31,6 +31,7 @@
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
 
+#include <std_msgs/Float32.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -204,6 +205,7 @@ namespace regulated_pure_pursuit_controller
 
     // Reversing
     bool allow_reversing_;
+    bool enable_collision_checking_{false};
 
     // Regulated linear velocity scaling
     bool use_regulated_linear_velocity_scaling_;
@@ -247,6 +249,7 @@ namespace regulated_pure_pursuit_controller
     ros::Publisher carrot_pub_;
     ros::Publisher carrot_arc_pub_;
     ros::Publisher kink_pub_;
+    ros::Publisher status_pub_;
 
     /**
      * Configs

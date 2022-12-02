@@ -53,7 +53,7 @@ add_library(regulated_pure_pursuit_controller
 
 target_link_libraries(regulated_pure_pursuit_controller 
                         ${catkin_LIBRARIES})
-add_dependencies(regulated_pure_pursuit_controller nav_msgs_gencpp)
+# add_dependencies(regulated_pure_pursuit_controller nav_msgs_gencpp)
 
 install(TARGETS regulated_pure_pursuit_controller
         ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
