@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
         ddynamic_reconfigure
         tf
         mbf_msgs
+        flexa_msgs
         mbf_costmap_core
 )
 
@@ -42,6 +43,7 @@ catkin_package(
         ddynamic_reconfigure
         tf
         mbf_msgs
+        flexa_msgs
         mbf_costmap_core
 )
 

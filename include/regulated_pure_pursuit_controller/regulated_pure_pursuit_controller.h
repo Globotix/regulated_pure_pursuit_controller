@@ -39,6 +39,7 @@
 #include <geometry_msgs/Pose2D.h>
 #include <mbf_costmap_core/costmap_controller.h>
 #include <mbf_msgs/ExePathResult.h>
+#include <flexa_msgs/regulatedStatus.h>
 
 #include "regulated_pure_pursuit_controller/helper.h"
 
@@ -214,6 +215,9 @@ namespace regulated_pure_pursuit_controller
     double min_approach_linear_velocity_;
     double regulated_linear_scaling_min_radius_;
     double regulated_linear_scaling_min_speed_;
+
+    // TODO: This is for debugging, remove in the future
+    flexa_msgs::regulatedStatus float32_msg_;
 
     // Inflation cost scaling (Limit velocity by proximity to obstacles)
     bool use_cost_regulated_linear_velocity_scaling_;

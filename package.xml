@@ -34,6 +34,9 @@
   <build_depend>mbf_msgs</build_depend>
   <run_depend>mbf_msgs</run_depend>
 
+  <build_depend>flexa_msgs</build_depend>
+  <run_depend>flexa_msgs</run_depend>
+
   <export>
     <nav_core plugin="${prefix}/regulated_pure_pursuit_controller.xml"/>
     <mbf_costmap_core plugin="${prefix}/regulated_pure_pursuit_controller.xml" />
