@@ -64,7 +64,7 @@ namespace regulated_pure_pursuit_controller
         carrot_pub_ = nh.advertise<geometry_msgs::PointStamped>("lookahead_point", 1);
         carrot_arc_pub_ = nh.advertise<nav_msgs::Path>("lookahead_collision_arc", 1);
         kink_pub_ = nh.advertise<geometry_msgs::PointStamped>("kink_point", 1);
-        status_pub_ = nh.advertise<std_msgs::Float32>("status", 1);
+        status_pub_ = nh.advertise<flexa_msgs::regulatedStatus>("status", 1);
     }
 
     void RegulatedPurePursuitController::initParams(ros::NodeHandle &nh)
@@ -300,6 +300,7 @@ namespace regulated_pure_pursuit_controller
                 lookahead_dist = kinked_dist;
             }
         }
+        
         carrot_pub_.publish(createCarrotMsg(carrot_pose));
 
         // Carrot distance squared
@@ -359,13 +360,14 @@ namespace regulated_pure_pursuit_controller
             angular_vel = 0.0;
         }
 
-        std_msgs::Float32 float32_msg;
-        float32_msg.data = lookahead_dist;
-        status_pub_.publish(float32_msg);
+        float32_msg_.lookahead_dist = lookahead_dist;
+        float32_msg_.command_speed = linear_vel;
+        status_pub_.publish(float32_msg_);
 
         // populate and return message
         cmd_vel.twist.linear.x = linear_vel;
         cmd_vel.twist.angular.z = angular_vel;
+
         return mbf_msgs::ExePathResult::SUCCESS;
     }
 
@@ -454,6 +456,8 @@ namespace regulated_pure_pursuit_controller
         // Use the lowest of the 2 constraint heuristics, but above the minimum translational speed
         linear_vel = std::min(cost_vel, curvature_vel);
         linear_vel = std::max(linear_vel, regulated_linear_scaling_min_speed_);
+        float32_msg_.cost_vel = cost_vel;
+        float32_msg_.curvature_vel = curvature_vel;
 
         // if the actual lookahead distance is shorter than requested, that means we're at the
         // end of the path. We'll scale linear velocity by error to slow to a smooth stop.
@@ -506,10 +510,17 @@ namespace regulated_pure_pursuit_controller
 
     bool RegulatedPurePursuitController::getAlternateKinkLookAheadDistance(const std::vector<geometry_msgs::PoseStamped> &transformed_plan, geometry_msgs::PointStamped &kink_message)
     {
-        // This is for debugging purposes
-        nav_msgs::Path dummy_path;
 
         int number_of_odd_elements = 13;
+
+        // path is too short to check
+        if (transformed_plan.size() < number_of_odd_elements + 1)
+        {
+            return false;
+        }
+
+        // This is for debugging purposes
+        nav_msgs::Path dummy_path;
         int half = number_of_odd_elements / 2;
         int full = half * 2;
 
@@ -554,6 +565,8 @@ namespace regulated_pure_pursuit_controller
         {
             // Normal flow
             lookahead_dist = fabs(speed.linear.x) * lookahead_time_;
+            float32_msg_.lookahead_dist_pre = lookahead_dist;
+            float32_msg_.speed = speed.linear.x;
             lookahead_dist = std::clamp(lookahead_dist, min_lookahead_dist_, max_lookahead_dist_);
         }
 
