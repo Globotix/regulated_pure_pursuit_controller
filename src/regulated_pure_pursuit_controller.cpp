@@ -347,7 +347,7 @@ namespace regulated_pure_pursuit_controller
             // Travel forward and accordinging to the curvature
             // ROS_INFO("Simply respecting the curvature of the path");
             // Constrain linear velocity
-            applyConstraints(std::fabs(lookahead_dist - sqrt(carrot_dist2)), lookahead_dist, curvature, speed, costAtPose(robot_pose.pose.position.x, robot_pose.pose.position.y), linear_vel, sign);
+            applyConstraints(std::fabs(lookahead_dist_ - sqrt(carrot_dist2)), lookahead_dist, curvature, speed, costAtPose(robot_pose.pose.position.x, robot_pose.pose.position.y), linear_vel, sign);
 
             // Apply curvature to angular velocity after constraining linear velocity
             angular_vel = linear_vel * curvature;
