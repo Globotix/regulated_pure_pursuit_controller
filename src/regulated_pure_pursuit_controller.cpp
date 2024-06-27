@@ -292,7 +292,7 @@ namespace regulated_pure_pursuit_controller
             double carrot_dist = std::hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
 
             bool condition_one = (always_prioritise_alternate_lookahead_ || kinked_dist < carrot_dist || kinkedIsPosWhileCarrotIsNeg(kink_message, carrot_pose));
-            if (condition_one && kinked_dist >= 0)
+            if (condition_one && kinked_dist >= 0.2)
             {
                 carrot_pose.pose.position.x = kink_message.point.x;
                 carrot_pose.pose.position.y = kink_message.point.y;
